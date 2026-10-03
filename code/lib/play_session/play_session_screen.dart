@@ -351,6 +351,14 @@ class _BoardView extends StatelessWidget {
             builder: (context, constraints) {
               final size = constraints.biggest.width / Square.boardSize;
               return GridView.builder(
+                // Without this, a `GridView` whose `padding` is null wraps its
+                // sliver in a `SliverPadding` built from `MediaQuery.padding`
+                // along the scroll axis. `ResponsiveScreen` deliberately leaves
+                // the top and bottom insets unconsumed, so the notch and the
+                // home indicator would be added to the board's height here and
+                // then clipped away, taking the bottom row of pieces with them.
+                // The screen above already handled the safe area.
+                padding: EdgeInsets.zero,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: Square.boardSize,
