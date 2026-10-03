@@ -72,6 +72,107 @@ void main() {
     });
   });
 
+  group('RuleVariant', () {
+    test('plays the American rule unless the player picks otherwise', () {
+      // A player who never opens Settings must get exactly the game they got
+      // before the variant existed, so the default has to be the default rules.
+      expect(RuleVariant.defaultVariant.rules, Rules.american);
+      expect(RuleVariant.defaultVariant, RuleVariant.values.first);
+    });
+
+    test('offers at least two ways of playing', () {
+      expect(RuleVariant.choices, RuleVariant.values);
+      expect(RuleVariant.choices.length, greaterThanOrEqualTo(2));
+      // The variants have to actually differ, or the choice is a decoration.
+      expect(
+        RuleVariant.choices.map((variant) => variant.rules).toSet().length,
+        RuleVariant.choices.length,
+      );
+    });
+
+    test('holds a man to the forwards diagonals in one of them', () {
+      const forwardsOnly = RuleVariant.menCaptureForwardsOnly;
+      expect(forwardsOnly.rules.menCaptureBackward, isFalse);
+      // 14 is c5 and 9 is b6, so jumping b6 carries a black man towards rank 8.
+      expect(movesOf('B:W9:B14', rules: forwardsOnly.rules), [
+        'c5-b4',
+        'c5-d4',
+      ]);
+      // And in the other it is that jump which the man is allowed.
+      expect(movesOf('B:W9:B14', rules: RuleVariant.defaultVariant.rules), [
+        'c5xa7',
+      ]);
+    });
+
+    test('lets a crowned king jump backwards whichever way of playing', () {
+      // Crowning, not the variant, is what buys a piece the backwards jump.
+      for (final variant in RuleVariant.choices) {
+        expect(movesOf('B:W9:BK14', rules: variant.rules), [
+          'c5xa7',
+        ], reason: 'the king should jump backwards under $variant');
+      }
+    });
+
+    test('describes each choice in words a player can act on', () {
+      for (final variant in RuleVariant.choices) {
+        expect(variant.label, isNotEmpty, reason: '$variant needs a label');
+        expect(
+          variant.description,
+          isNotEmpty,
+          reason: '$variant needs a description',
+        );
+        // The label is what lands in the settings list, so it has to be short
+        // enough to sit on one line next to an icon.
+        expect(variant.label.length, lessThanOrEqualTo(40));
+      }
+      // Two different names, or the settings row could not tell them apart.
+      final labels = RuleVariant.choices
+          .map((variant) => variant.label)
+          .toSet();
+      expect(labels.length, RuleVariant.choices.length);
+    });
+
+    test('is handed straight to a game', () {
+      // The app builds its game with a variant's rules, and the game has to
+      // keep them. If it only borrowed them for move generation and judged the
+      // finish under different rules, the two halves of the engine would
+      // disagree about the same game.
+      for (final variant in RuleVariant.choices) {
+        expect(Game.standard(rules: variant.rules).rules, variant.rules);
+      }
+    });
+
+    test('names a game by the rules it is being played under', () {
+      for (final variant in RuleVariant.choices) {
+        expect(RuleVariant.find(variant.rules), variant);
+      }
+      // A game can also be created with rules no variant describes, and then
+      // there is no honest name for it, which is better than the wrong one.
+      expect(RuleVariant.find(const Rules(mustCapture: false)), isNull);
+      expect(RuleVariant.find(Rules.optionalMaximumCapture), isNull);
+    });
+
+    test('reads a stored name back as the same variant', () {
+      for (final variant in RuleVariant.choices) {
+        expect(RuleVariant.fromName(variant.name), variant);
+      }
+    });
+
+    test('falls back to the default for a name it does not recognise', () {
+      // Storage outlives the build that wrote it, so a variant that has been
+      // renamed or removed, or a value that was never one, must not throw.
+      expect(RuleVariant.fromName('kingTakesAges'), RuleVariant.defaultVariant);
+      expect(RuleVariant.fromName(''), RuleVariant.defaultVariant);
+      expect(RuleVariant.fromName(null), RuleVariant.defaultVariant);
+    });
+
+    test('reads as its label when printed', () {
+      for (final variant in RuleVariant.choices) {
+        expect(variant.toString(), variant.label);
+      }
+    });
+  });
+
   group('DrawRules', () {
     test('is the American rule by default', () {
       const rules = DrawRules();

@@ -4,9 +4,14 @@
 
 import 'dart:io';
 
+import 'package:checkers/engine/checkers.dart';
 import 'package:checkers/main.dart';
+import 'package:checkers/settings/settings.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Answers the platform plugins the app reaches for as it starts.
 ///
@@ -85,6 +90,112 @@ void main() {
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('New Game'), findsOneWidget);
+  });
+
+  testWidgets('the player can choose how men capture', (tester) async {
+    // Start from an empty store so the test cannot inherit a saved choice.
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    // The settings list names the way of playing currently in force.
+    expect(find.text(RuleVariant.defaultVariant.label), findsOneWidget);
+
+    await tester.tap(find.text('Rules'));
+    await tester.pumpAndSettle();
+
+    // Every way of playing is on offer, each one described in words, because
+    // the name alone does not tell a player what will change at the board. Only
+    // the dialog describes them, so each description appears exactly once.
+    for (final variant in RuleVariant.choices) {
+      expect(find.text(variant.label), findsWidgets);
+      expect(find.text(variant.description), findsOneWidget);
+    }
+
+    // The way of playing in force is ticked, so the player can see what they
+    // would be switching away from before they tap anything.
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(
+      find.byIcon(Icons.circle_outlined),
+      findsNWidgets(RuleVariant.choices.length - 1),
+    );
+
+    await tester.tap(find.text(RuleVariant.menCaptureForwardsOnly.label));
+    await tester.pumpAndSettle();
+
+    // Choosing closes the dialog and the settings row names the new choice.
+    expect(
+      find.text(RuleVariant.menCaptureForwardsOnly.description),
+      findsNothing,
+    );
+    expect(find.text(RuleVariant.menCaptureForwardsOnly.label), findsOneWidget);
+
+    // The controller, which is what the next game is built from, has taken it.
+    final settings = Provider.of<SettingsController>(
+      tester.element(find.text(RuleVariant.menCaptureForwardsOnly.label)),
+      listen: false,
+    );
+    expect(settings.ruleVariant.value, RuleVariant.menCaptureForwardsOnly);
+
+    // And the choice is remembered, by name rather than by position in the list.
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString('ruleVariant'),
+      RuleVariant.menCaptureForwardsOnly.name,
+    );
+
+    // Back to the menu, and into a new game, which is built from the choice.
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+
+    // The game names the rules it is being played under, so the player can see
+    // the setting reached the board rather than having to take it on trust.
+    expect(find.text(RuleVariant.menCaptureForwardsOnly.label), findsOneWidget);
+  });
+
+  testWidgets('a game names the rules it is being played under', (
+    tester,
+  ) async {
+    // The store is shared by every test in this file, so it is emptied rather
+    // than left holding whatever the previous test chose.
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+
+    // Nothing has been chosen, so the game is played by the default rules.
+    expect(find.text(RuleVariant.defaultVariant.label), findsOneWidget);
+
+    // Restarting with the setting untouched leaves the rules as they were.
+    await tester.tap(find.text('Restart'));
+    await tester.pumpAndSettle();
+    expect(find.text(RuleVariant.defaultVariant.label), findsOneWidget);
+  });
+
+  testWidgets('a chosen way of playing survives a restart of the app', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'ruleVariant': RuleVariant.menCaptureForwardsOnly.name,
+    });
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    // The saved choice is the one shown, not the default.
+    expect(find.text(RuleVariant.defaultVariant.label), findsNothing);
+    expect(find.text(RuleVariant.menCaptureForwardsOnly.label), findsOneWidget);
   });
 
   testWidgets('the rules are reachable from the main menu', (tester) async {

@@ -30,6 +30,8 @@ Open **Rules** from the main menu for the full rules. The short version:
   diagonal.
 - You **must** capture when you can. If several captures are available you must
   play the one that takes the most pieces.
+- Whether an uncrowned man may capture backwards is a setting. See
+  [Choosing how men capture](#choosing-how-men-capture).
 - When a man reaches the far side of the board it is crowned and becomes a king.
 - Win by taking all of the computer's pieces, or by leaving it with no legal
   move. A game is drawn after three repetitions of the same position, or after
@@ -46,7 +48,7 @@ code
 │   ├── engine            The rules of checkers. No Flutter, no widgets.
 │   ├── play_session      The board you play on, and the computer's reply
 │   ├── audio             Music and sound effects
-│   ├── settings          Sound and music toggles, player name, reset progress
+│   ├── settings          Sound and music toggles, player name, rules, reset
 │   ├── style             Colours, buttons, transitions, responsive layout
 │   ├── rules             The how-to-play screen
 │   ├── statistics        How many games you have won
@@ -173,13 +175,65 @@ placeholder music in `assets/music/`, which is Creative Commons music by
 
 ## Settings
 
-Sound effects, music and a player name are stored on the device with
-`shared_preferences`. To change what is saved or how, edit the files in
-`lib/settings/persistence/`. `SettingsPersistence` is the interface,
+Sound effects, music, a player name and the chosen way of playing are stored on
+the device with `shared_preferences`. To change what is saved or how, edit the
+files in `lib/settings/persistence/`. `SettingsPersistence` is the interface,
 `LocalStorageSettingsPersistence` is the real implementation, and
 `SettingsController` in `settings.dart` is what the UI reads.
 
 Progress is deliberately kept in memory only, so it resets each launch.
+
+### Choosing how men capture
+
+**Settings > Rules** picks between the ways of playing the engine knows about.
+Currently that is one choice:
+
+| Option | What it means |
+|---|---|
+| Men capture backwards | An uncrowned man jumps forwards and backwards. Kings jump either way as well. |
+| Men capture forwards only | Only a crowned king jumps backwards. Until it reaches the far row a man jumps forwards only. |
+
+Each option carries a one-line description of what changes in play, and the
+play screen names the rules the game in front of you is actually being played
+under, so you can see the choice took effect.
+
+The setting applies to the **next** game, never to one already in progress. The
+game keeps the rules it started with, and `Restart` re-reads the setting because
+restarting is starting a new game.
+
+The choice lives in the engine as `RuleVariant`, a named bundle of `Rules`
+flags, so the screens offer one choice with a description rather than a wall of
+independent toggles. To add a variation:
+
+1. Add a value to `RuleVariant` in `lib/engine/rules.dart` with its `label`,
+   `description` and `rules`.
+2. Give it a test in `test/checkers/rules_test.dart`.
+
+It appears in the Settings dialog automatically — there is nothing to wire up.
+The variant is stored by `name`, so renaming or removing one falls back to the
+default on a player's next launch instead of breaking startup.
+
+### Variable rules worth considering
+
+`Rules` has seven flags. One (`menCaptureBackward`) is player-selectable today.
+The rest are fixed, and each is a real variation that draughts players argue
+about, so they are the obvious next candidates. Note that two of them also
+differ from the historical American game, which is worth settling before either
+is exposed:
+
+| Flag | Default | The variation it controls |
+|---|---|---|
+| `menCaptureBackward` | `true` | **Player-selectable.** Whether an uncrowned man may jump backwards. |
+| `longRangedKings` | `true` | "Flying kings", which may move and capture any distance along a diagonal. Historical American checkers uses **short** kings, moving one square at a time; flying kings are the international rule. |
+| `mustCaptureMaximum` | `true` | Whether the biggest capture must be taken when several are on offer. American checkers lets a player choose any sequence, as long as every capture in it is made. |
+| `mustCapture` | `true` | Whether capturing is compulsory at all. Rarely varied in practice. |
+| `promoteOnArrival` | `true` | Whether a man is crowned the instant it reaches the far row. Turning this off lets it jump back off that row as a man; `promoteOnPassThrough` then decides whether a man merely passing through is crowned. |
+| `autoDeclareMaterialEnd` | `true` | Whether holding only kings against a side that still has men ends the game immediately. |
+| `repetitionLimit`, `quietMoveLimit` (`DrawRules`) | `3`, `50` | Draw handling. These live on `DrawRules` rather than `Rules`. |
+
+Worth deciding first: which of these should a player ever be offered, and which
+are simply wrong for the game as advertised. Exposing a flag that disagrees with
+the rules screen is worse than not offering it.
 
 ## Troubleshooting
 

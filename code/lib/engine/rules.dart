@@ -98,6 +98,104 @@ class Rules {
       'menBackward: $menCaptureBackward, flyingKings: $longRangedKings)';
 }
 
+/// A rule variation a player can pick between in the app.
+///
+/// Each variant is a named bundle of [Rules] flags, so that a screen only ever
+/// offers one choice instead of a wall of independent toggles. Anything added
+/// here has to be a whole way of playing, not a single flag, because the player
+/// is choosing between descriptions of how the game behaves.
+///
+/// The engine does not decide which variant is the right one to play. Callers
+/// pass the one they want to [Game.standard] and the rest of the library goes
+/// along with it.
+enum RuleVariant {
+  /// Men jump backwards as readily as forwards.
+  ///
+  /// A man that has not yet been crowned may jump an enemy piece in any of the
+  /// four diagonal directions, so it can take a piece sitting behind it.
+  menCaptureAnyDirection(
+    label: 'Men capture backwards',
+    description:
+        'A man that has not been crowned jumps forwards and backwards. '
+        'Kings jump either way as well.',
+    rules: Rules.american,
+  ),
+
+  /// Men jump forwards only, and only a king may jump backwards.
+  ///
+  /// This is the more common rule for the 8x8 game: a man takes the same two
+  /// diagonals it moves along, and the ability to jump backwards is one of the
+  /// things crowning buys a piece.
+  menCaptureForwardsOnly(
+    label: 'Men capture forwards only',
+    description:
+        'Only a crowned king jumps backwards. Until it reaches the far row a '
+        'man jumps forwards only.',
+    rules: Rules.british,
+  );
+
+  const RuleVariant({
+    required this.label,
+    required this.description,
+    required this.rules,
+  });
+
+  /// The variant played when nothing has been chosen, and the one a stored
+  /// value falls back to when it cannot be recognised.
+  ///
+  /// This is the first value in the enum, and the one [Rules.american] spells
+  /// out, so a player who never opens Settings plays this.
+  static const RuleVariant defaultVariant = RuleVariant.menCaptureAnyDirection;
+
+  /// The short name of this variant, as shown in a settings list.
+  final String label;
+
+  /// A sentence or two explaining what a player will actually notice changing.
+  ///
+  /// It goes next to [label] in the app so that the choice can be made without
+  /// knowing the game's vocabulary for it.
+  final String description;
+
+  /// The rules this variant plays by.
+  final Rules rules;
+
+  /// The variant named [name], or [defaultVariant] when [name] is not one of
+  /// them.
+  ///
+  /// Settings are restored from storage that may have been written by an older
+  /// or newer build, or may simply be corrupt, so an unrecognised name falls
+  /// back to [defaultVariant] rather than throwing on startup.
+  static RuleVariant fromName(String? name) {
+    for (final variant in values) {
+      if (variant.name == name) {
+        return variant;
+      }
+    }
+    return defaultVariant;
+  }
+
+  /// Every variant with its label and description, ready to drop into a list.
+  static List<RuleVariant> get choices => values;
+
+  /// The variant that plays by [rules], or `null` if none of them do.
+  ///
+  /// This is how a game names the rules it is actually being played under. A
+  /// game can also be created with rules that no variant describes, such as a
+  /// preset from an older build or a caller's own set, and then there is no
+  /// honest label to show and saying so is better than naming the wrong one.
+  static RuleVariant? find(Rules rules) {
+    for (final variant in values) {
+      if (variant.rules == rules) {
+        return variant;
+      }
+    }
+    return null;
+  }
+
+  @override
+  String toString() => label;
+}
+
 /// The conditions under which a game is called a draw.
 ///
 /// A side that has lost all of its pieces, or that has no legal move left, is

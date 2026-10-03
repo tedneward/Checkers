@@ -12,6 +12,7 @@ import '../audio/audio_controller.dart';
 import '../audio/sounds.dart';
 import '../engine/checkers.dart';
 import '../player_progress/player_progress.dart';
+import '../settings/settings.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
 import '../style/responsive_screen.dart';
@@ -57,7 +58,17 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   }
 
   void _startNewGame() {
-    _game = Game.standard();
+    // Read, not watch: the variant chosen in Settings is only consulted when a
+    // game begins, so a change made while one is under way cannot reach back
+    // and alter a game already in progress. Restarting does pick it up, because
+    // restarting is starting a new game.
+    //
+    // Settings load asynchronously, so on the very first game after launch this
+    // may still be reading the default. That matches how the audio settings
+    // behave at startup, and by the time the player has found the Settings
+    // screen their choice has long since landed.
+    final variant = context.read<SettingsController>().ruleVariant.value;
+    _game = Game.standard(rules: variant.rules);
     _selected = null;
     _thinking = false;
     _searchId++;
@@ -220,6 +231,20 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
                 fontSize: 18,
               ),
             ),
+            // Names the rules this game is actually being played under, so that
+            // a player who just changed the setting can see it took effect. It
+            // is read back off the game's own rules rather than off the setting
+            // it was built from, so the two cannot drift apart and leave the
+            // game playing by something other than what is written here.
+            if (RuleVariant.find(_game.rules) case final variant?) ...[
+              const SizedBox(height: 2),
+              Text(
+                variant.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),

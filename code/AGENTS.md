@@ -26,8 +26,8 @@ outcome — that lands in `lib/` outside the engine is misplaced.
 ```shell
 flutter pub get          # after changing pubspec.yaml
 flutter analyze          # must be clean
-flutter test             # 124 tests, must all pass
-flutter test test/checkers/    # engine only, ~2s, use this while iterating
+flutter test             # 162 tests, must all pass
+flutter test test/checkers/    # engine only, use this while iterating
 flutter run -d macos     # fastest way to actually see the game
 flutter build macos --debug    # confirms the whole app compiles
 ```
@@ -68,6 +68,27 @@ adding to it and follow what you find:
 - Named parameters for anything a caller might reasonably want to change.
 - Private helpers with leading underscore (`_explore`, `_applyCaptureRules`).
 
+### Rule variants are named bundles
+
+When offering players a choice of how the game behaves, do not expose a
+seven-toggle mess. Instead put a whole way of playing into
+`RuleVariant` in `lib/engine/rules.dart`. Each variant carries:
+
+- `label` — short, one line, used in the Settings list
+- `description` — a sentence or two explaining what changes in play
+- `rules` — the exact `Rules` bundle it means
+
+Then:
+- `RuleVariant.defaultVariant` must preserve the current engine defaults (and
+  thus existing tests). Changing it is a product decision with blast radius.
+- `RuleVariant.fromName` and `RuleVariant.find` must be tolerant of unknown
+  values (fall back to default / return null) because persisted storage outlives
+  the build that wrote it.
+- `Game.standard(rules: variant.rules)` is how callers actually use it; the
+  UI should display the variant by reading `RuleVariant.find(_game.rules)`, not
+  by keeping a separate copy that can drift.
+- Add exports for new types in `lib/engine/checkers.dart`.
+
 ### Add exports in `lib/engine/checkers.dart`
 
 That file is the engine's public API surface. It uses explicit `show` clauses:
@@ -95,7 +116,7 @@ Read these before changing the engine; they are the whole domain model.
 | `board.dart` | Immutable position. Reads/writes `W:W21,22,K29:B1,2`. |
 | `move.dart` | A move as an explicit `path`; captured squares are the odd entries. |
 | `move_generator.dart` | Legal moves. Walks whole jump chains, not one jump at a time — that is what makes maximum-capture enforceable. |
-| `rules.dart` | `Rules` (7 flags) and `DrawRules`. `american` is the default. |
+| `rules.dart` | `Rules` (7 flags), `DrawRules`, and `RuleVariant` (named bundles of rules). |
 | `notation.dart` | `b2xa4xc6` in and out. Separators optional. |
 | `game.dart` | Public face. Undo/redo, `parseMove`, FEN round-trip, outcome judging. |
 | `ai.dart` | Negamax + alpha-beta + iterative deepening. Fully deterministic. |

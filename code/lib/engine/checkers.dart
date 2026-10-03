@@ -35,5 +35,5 @@ export 'move.dart' show IllegalMoveException, Move;
 export 'move_generator.dart' show MoveGenerator;
 export 'notation.dart' show MoveNotation, Notation, ParsedNotation;
 export 'piece.dart' show Piece, PieceKind, Side;
-export 'rules.dart' show DrawRules, Rules;
+export 'rules.dart' show DrawRules, RuleVariant, Rules;
 export 'square.dart' show Square;

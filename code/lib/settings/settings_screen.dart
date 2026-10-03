@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../engine/checkers.dart';
 import '../player_progress/player_progress.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
 import '../style/responsive_screen.dart';
 import 'custom_name_dialog.dart';
+import 'rule_variant_dialog.dart';
 import 'settings.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -56,6 +58,15 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             _NameChangeLine('Name'),
+            ValueListenableBuilder<RuleVariant>(
+              valueListenable: settings.ruleVariant,
+              builder: (context, variant, child) => _SettingsLine(
+                'Rules',
+                Icon(Icons.balance),
+                onSelected: () => showRuleVariantDialog(context),
+                caption: variant.label,
+              ),
+            ),
             _SettingsLine(
               'Reset progress',
               const Icon(Icons.delete),
@@ -133,7 +144,11 @@ class _SettingsLine extends StatelessWidget {
 
   final VoidCallback? onSelected;
 
-  const _SettingsLine(this.title, this.icon, {this.onSelected});
+  /// A short note shown under [title], naming whatever the setting is currently
+  /// set to. Lines that are just on or off do not need one.
+  final String? caption;
+
+  const _SettingsLine(this.title, this.icon, {this.onSelected, this.caption});
 
   @override
   Widget build(BuildContext context) {
@@ -146,14 +161,24 @@ class _SettingsLine extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Permanent Marker',
-                  fontSize: 30,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Permanent Marker',
+                      fontSize: 30,
+                    ),
+                  ),
+                  if (caption != null)
+                    Text(
+                      caption!,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                ],
               ),
             ),
             icon,

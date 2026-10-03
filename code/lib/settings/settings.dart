@@ -5,6 +5,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
+import '../engine/checkers.dart';
 import 'persistence/local_storage_settings_persistence.dart';
 import 'persistence/settings_persistence.dart';
 
@@ -34,6 +35,18 @@ class SettingsController {
 
   /// Whether or not the music is on.
   ValueNotifier<bool> musicOn = ValueNotifier(true);
+
+  /// Which way of playing the game the player has chosen.
+  ///
+  /// This is a whole [RuleVariant] rather than a single boolean because the
+  /// variants bundle several rules together and the player is choosing between
+  /// descriptions of how the game plays, not flipping flags one at a time.
+  ///
+  /// A game that is already under way keeps the rules it started with; this
+  /// only decides the rules the next game is created with.
+  ValueNotifier<RuleVariant> ruleVariant = ValueNotifier(
+    RuleVariant.defaultVariant,
+  );
 
   /// Creates a new instance of [SettingsController] backed by [store].
   ///
@@ -65,6 +78,12 @@ class SettingsController {
     _store.saveSoundsOn(soundsOn.value);
   }
 
+  /// Remembers the [variant] the player picked for the next game.
+  void setRuleVariant(RuleVariant variant) {
+    ruleVariant.value = variant;
+    _store.saveRuleVariant(variant);
+  }
+
   /// Asynchronously loads values from the injected persistence store.
   Future<void> _loadStateFromPersistence() async {
     final loadedValues = await Future.wait([
@@ -84,6 +103,7 @@ class SettingsController {
           .getMusicOn(defaultValue: true)
           .then((value) => musicOn.value = value),
       _store.getPlayerName().then((value) => playerName.value = value),
+      _store.getRuleVariant().then((value) => ruleVariant.value = value),
     ]);
 
     _log.fine(() => 'Loaded settings: $loadedValues');

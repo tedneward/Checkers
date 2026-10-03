@@ -4,6 +4,7 @@
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../engine/checkers.dart';
 import 'settings_persistence.dart';
 
 /// An implementation of [SettingsPersistence] that uses
@@ -37,6 +38,15 @@ class LocalStorageSettingsPersistence extends SettingsPersistence {
   }
 
   @override
+  Future<RuleVariant> getRuleVariant() async {
+    final prefs = await instanceFuture;
+    // The name is resolved by the engine rather than here, so that a value
+    // written by a build which offered different variants falls back to the
+    // default instead of taking the app down on startup.
+    return RuleVariant.fromName(prefs.getString('ruleVariant'));
+  }
+
+  @override
   Future<void> saveAudioOn(bool value) async {
     final prefs = await instanceFuture;
     await prefs.setBool('audioOn', value);
@@ -52,6 +62,14 @@ class LocalStorageSettingsPersistence extends SettingsPersistence {
   Future<void> savePlayerName(String value) async {
     final prefs = await instanceFuture;
     await prefs.setString('playerName', value);
+  }
+
+  @override
+  Future<void> saveRuleVariant(RuleVariant value) async {
+    final prefs = await instanceFuture;
+    // Stored by name rather than by index, so that adding a variant later does
+    // not silently repoint everybody's saved choice at a different one.
+    await prefs.setString('ruleVariant', value.name);
   }
 
   @override
