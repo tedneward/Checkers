@@ -57,7 +57,6 @@ class SettingsScreen extends StatelessWidget {
                 onSelected: settings.toggleMusicOn,
               ),
             ),
-            _NameChangeLine('Name'),
             ValueListenableBuilder<RuleVariant>(
               valueListenable: settings.ruleVariant,
               builder: (context, variant, child) => _SettingsLine(
@@ -76,20 +75,6 @@ class SettingsScreen extends StatelessWidget {
                 caption: enabled ? 'On' : 'Off',
               ),
             ),
-            _SettingsLine(
-              'Reset progress',
-              const Icon(Icons.delete),
-              onSelected: () {
-                context.read<PlayerProgress>().reset();
-
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Player progress has been reset.'),
-                  ),
-                );
-              },
-            ),
             _gap,
           ],
         ),
@@ -98,48 +83,6 @@ class SettingsScreen extends StatelessWidget {
             GoRouter.of(context).pop();
           },
           child: const Text('Back'),
-        ),
-      ),
-    );
-  }
-}
-
-class _NameChangeLine extends StatelessWidget {
-  final String title;
-
-  const _NameChangeLine(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    final settings = context.watch<SettingsController>();
-
-    return InkResponse(
-      highlightShape: BoxShape.rectangle,
-      onTap: () => showCustomNameDialog(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'Permanent Marker',
-                fontSize: 30,
-              ),
-            ),
-            const Spacer(),
-            ValueListenableBuilder(
-              valueListenable: settings.playerName,
-              builder: (context, name, child) => Text(
-                '‘$name’',
-                style: const TextStyle(
-                  fontFamily: 'Permanent Marker',
-                  fontSize: 30,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
