@@ -1,11 +1,11 @@
 {
-    "name": "basic",
-    "short_name": "basic",
+    "name": "Checkers",
+    "short_name": "Checkers",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A head-to-head version of the classic game.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

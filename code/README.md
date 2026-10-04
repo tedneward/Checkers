@@ -1,10 +1,11 @@
 # Checkers
 
-Classic American checkers, built with Flutter. You play red against the
-computer, which plays black.
+Classic checkers, built with Flutter. Two players take turns on the same board,
+red moving first.
 
 The game runs on iOS, Android, macOS, Windows, Linux and the web from a single
-Flutter codebase.
+Flutter codebase. An AI is available as an optional move adviser, but it never
+plays a side.
 
 ## Getting started
 
@@ -37,8 +38,107 @@ Open **Rules** from the main menu for the full rules. The short version:
   move. A game is drawn after three repetitions of the same position, or after
   50 moves by each player with no capture and no promotion.
 
-Click one of your pieces to pick it up. The squares it can reach light up. Click
-one of those to move. There is no drag-and-drop; every move is two clicks.
+Click one of your pieces to pick it up. The squares it can reach light up with a
+dot. Click one of those to move. There is no drag-and-drop; every move is two
+clicks.
+
+Both players move on the same board; nothing is played for you. When a move is
+played the screen names who is on turn, and the last move stays shaded.
+
+### AI suggestions
+
+**Settings > AI Suggestions** turns on an adviser. With it on, the AI works out
+the best move for whoever is on turn and:
+
+- shades the square the move starts from,
+- names it in words under the board, as `Suggestion: a3-b4`.
+
+It is only advice. Nobody's move is made for you, and you are free to play
+something else. The suggestion is worked out again after every move, so it
+always refers to the position actually on the board. While a piece is in hand
+the shading is hidden, because the dots already say what that piece can do and
+two competing sets of markers would only be confusing.
+
+The search runs in an isolate so the board stays responsive while it thinks, and
+its strength is the `_aiDepth` / `_aiTimeLimit` pair at the top of
+`lib/play_session/play_session_screen.dart`. It is advice only, so the two are
+tuned for a quick reply rather than for an unbeatable opponent.
+
+## History and replay
+
+Every game you play is recorded move by move. **History** on the main menu lists
+them, most recent first, with the date and time it started, how it ended, the
+rules it was played under, and how many moves it lasted. Selecting one opens it
+for replay.
+
+The replay screen puts the board on top and the move list underneath. The board
+opens on the last move; step back with the left arrow and forward with the right,
+or tap any move in the list to jump straight to it. The board is a picture of a
+game that has already happened, so tapping it does nothing.
+
+Replay works by feeding the recorded moves back through the same engine that
+played them, rather than rebuilding the position from the move list. If a stored
+move no longer parses, or is no longer legal under the rules in this build, the
+replay stops at it and says how much of the game it managed to show rather than
+failing or inventing a position that never happened.
+
+Two trash-can icons delete games. The one in each row deletes that game; the one
+by the heading wipes every recorded game. Both ask first.
+
+### Where games are stored
+
+A SQLite database, `history.db`, in the platform's application documents
+directory. That is deliberately the documents directory and not the database
+directory `sqflite` offers, because it is the one platforms back up:
+
+| Platform | Storage |
+|---|---|
+| iOS | Documents directory, backed up to iCloud Drive and visible in the Files app |
+| Android | Documents directory, included in Google auto-backup |
+| macOS | Documents directory inside the app sandbox container |
+| Windows, Linux | Documents directory, local only |
+| Web | IndexedDB via `sqlite3.wasm`, local to the browser profile |
+
+iOS and macOS have `UIFileSharingEnabled` / `LSSupportsOpeningDocumentsInPlace`
+set in their `Info.plist`, which is what puts that directory in Files and Finder.
+
+macOS is not actually synced to iCloud Drive, only made visible in Finder.
+Real sync there needs an iCloud container entitlement, which has to be
+provisioned for the app id before it can be added to
+`macos/Runner/DebugProfile.entitlements`:
+
+```xml
+<key>com.apple.developer.ubiquity-container-identifiers</key>
+<array>
+    <string>iCloud.com.example.checkers</string>
+</array>
+```
+
+If the database cannot be opened at all, the app falls back to keeping games in
+memory for the session and the history screen says so. Losing history is not a
+reason to stop somebody playing checkers.
+
+### Rebuilding the web SQLite binaries
+
+`web/sqlite3.wasm` and `web/sqflite_sw.js` are checked in so a web build needs no
+extra step. If the `sqlite3` dependency version changes, regenerate them with:
+
+```shell
+dart run sqflite_common_ffi_web:setup
+```
+
+The setup tool pins its own copy of `sqlite3.wasm`, which does not have to match
+the version `pubspec.lock` resolved — it is currently hardcoded to 3.6.0 while
+the app resolves 3.7.0, so the checked-in `.wasm` is the 3.7.0 one from the
+[sqlite3.dart releases][sqlite3-releases]. The mismatch does not show up at build
+time, so when the version changes, fetch the matching release and compare:
+
+```shell
+curl -sLO https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-<version>/sqlite3.wasm
+shasum -a 256 sqlite3.wasm web/sqlite3.wasm
+```
+
+[sqlite3-releases]: https://github.com/simolus3/sqlite3.dart/releases
 
 ## Project layout
 
@@ -47,9 +147,11 @@ code
 ├── lib
 │   ├── engine            The rules of checkers. No Flutter, no widgets.
 │   ├── play_session      The board you play on, and the computer's reply
+│   ├── history           Recording games, the history list, and replay
 │   ├── audio             Music and sound effects
-│   ├── settings          Sound and music toggles, player name, rules, reset
-│   ├── style             Colours, buttons, transitions, responsive layout
+│   ├── settings          Sound, music, name, rules, AI suggestions, reset
+│   ├── style             Colours, buttons, transitions, responsive layout,
+│   │                     and the BoardView that play and replay share
 │   ├── rules             The how-to-play screen
 │   ├── statistics        How many games you have won
 │   ├── about             Name, copyright, version
@@ -69,6 +171,7 @@ code
 │
 └── test
     ├── checkers          Engine tests, one file per part
+    ├── history           Replay, the SQLite store, the controller, the screens
     └── smoke_test.dart   A few end-to-end checks through the real app
 ```
 
@@ -112,6 +215,9 @@ A few things worth knowing if you change it:
 - `Rules` holds the rule variations. `Rules.american` is the default;
   `Rules.british` and `Rules.optionalMaximumCapture` are the alternates. Adding
   a variation means adding a flag and honouring it, not branching in the UI.
+- `RuleVariant` is what the player picks between in Settings: a named bundle of
+  `Rules` flags with a label and a description. Prefer adding one of these over
+  exposing raw flags.
 - Positions round-trip through a text form, `W:W21,22,K29:B1,2 W`, via
   `game.fen` and `Game.fromFen`. Tests use this constantly; it is the easiest
   way to set up a specific position.
@@ -126,6 +232,30 @@ notation text, because a `Move` cannot be sent between isolates.
 Difficulty is two constants at the top of that file: `_aiDepth` and
 `_aiTimeLimit`. Raise the depth for a harder opponent, but leave the time limit
 in place so the game never feels like it has hung.
+
+### Working on the history
+
+Four things, in the order they matter.
+
+- `BoardView` in `lib/style/board_view.dart` draws the board. Play and replay
+  both use it, so a fix to how the board looks applies to both at once. Do not
+  draw a second board in a screen; pass `enabled: false` if it is not
+  interactive.
+- `GameHistoryController` records games and reads them back. Every write is
+  chained rather than fired off, and every operation is logged and swallowed on
+  failure: history is a record of what happened, not a condition for what can
+  happen, so a full disk must never stop somebody finishing a game.
+- `GameHistoryStore` is the interface; `SqliteGameHistoryStore` and
+  `InMemoryGameHistoryStore` are the two implementations. The in-memory one is
+  what the app falls back to when the database will not open, and what the
+  screen tests use.
+- `ReplaySession` steps through one recorded game. It applies moves with the
+  engine and undoes them with `Game.undo`, because checkers has no inverse
+  move: putting a piece back and moving it elsewhere is not undoing a jump.
+
+The schema is two tables, `games` and `moves`, with `ON DELETE CASCADE` from the
+second to the first. That is what makes deleting one game take its moves with it
+without either delete having to know about the other.
 
 ## Building for release
 
@@ -175,13 +305,18 @@ placeholder music in `assets/music/`, which is Creative Commons music by
 
 ## Settings
 
-Sound effects, music, a player name and the chosen way of playing are stored on
-the device with `shared_preferences`. To change what is saved or how, edit the
-files in `lib/settings/persistence/`. `SettingsPersistence` is the interface,
+Sound effects, music, a player name, the chosen way of playing and whether AI
+suggestions are on are stored on the device with `shared_preferences`. To change
+what is saved or how, edit the files in `lib/settings/persistence/`.
+`SettingsPersistence` is the interface,
 `LocalStorageSettingsPersistence` is the real implementation, and
 `SettingsController` in `settings.dart` is what the UI reads.
 
 Progress is deliberately kept in memory only, so it resets each launch.
+
+Game history is the exception to the last point. Recorded games go to SQLite so
+they survive a restart, unlike wins, which are only a count of games you have
+won and have no history worth keeping.
 
 ### Choosing how men capture
 

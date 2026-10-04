@@ -180,6 +180,145 @@ void main() {
     expect(find.text(RuleVariant.defaultVariant.label), findsOneWidget);
   });
 
+  testWidgets('both players move on the same board', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+
+    // Red is to move first, and the board is live for whoever's turn it is.
+    expect(find.text('Red to move'), findsOneWidget);
+
+    // Play red's opening move, a3-b4.
+    await tester.tap(find.byKey(const ValueKey('square-a3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('square-b4')));
+    await tester.pumpAndSettle();
+
+    // Nobody moves on the player's behalf: black is on turn with all twelve of
+    // its pieces still on the board, having played exactly nothing.
+    expect(find.text('Black to move'), findsOneWidget);
+    expect(find.text('Red 12   Black 12'), findsOneWidget);
+  });
+
+  testWidgets('AI suggestions are off until they are asked for', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+
+    // The setting exists and defaults to off.
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('AI Suggestions'), findsOneWidget);
+    expect(find.text('Off'), findsOneWidget);
+
+    // Turning it on is remembered.
+    await tester.tap(find.text('AI Suggestions'));
+    await tester.pumpAndSettle();
+    expect(find.text('On'), findsOneWidget);
+  });
+
+  testWidgets('AI suggestions highlight a move on the board', (tester) async {
+    SharedPreferences.setMockInitialValues({'aiSuggestionsEnabled': true});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+
+    // The suggestion arrives off the UI isolate, so it needs real async time
+    // before the highlight can appear.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pumpAndSettle();
+
+    // The AI's "from" square is shaded to stand out from an ordinary dark
+    // square that the suggestion does not touch.
+    Color? backgroundOf(String square) {
+      final container = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byKey(ValueKey('square-$square')),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      return container.color;
+    }
+
+    expect(backgroundOf('a3'), isNot(backgroundOf('b4')));
+    // A light square is never shaded, whatever the AI thinks.
+    expect(backgroundOf('h7'), isNot(backgroundOf('a3')));
+
+    // And the suggestion is also named in words, so it does not depend on
+    // telling the shading apart.
+    expect(find.textContaining('Suggestion: a3-'), findsOneWidget);
+
+    // Playing the suggested move is a normal two-tap move like any other.
+    await tester.tap(find.byKey(const ValueKey('square-a3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('square-b4')));
+    await tester.pumpAndSettle();
+    // Playing it hands the turn over and asks for black's suggestion next.
+    expect(find.text('Computing suggestion...'), findsWidgets);
+
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pumpAndSettle();
+
+    // It is black's move now, and the suggestion names black's own move, not a
+    // stale one from before the board changed.
+    expect(find.text('Black to move'), findsOneWidget);
+    expect(find.textContaining('Suggestion: '), findsOneWidget);
+  });
+
+  testWidgets('a suggestion is dropped once it no longer fits', (tester) async {
+    SharedPreferences.setMockInitialValues({'aiSuggestionsEnabled': true});
+
+    await tester.pumpWidget(MyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pumpAndSettle();
+
+    Color? backgroundOf(String square) {
+      final container = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byKey(ValueKey('square-$square')),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      return container.color;
+    }
+
+    final suggestedFrom = backgroundOf('a3');
+
+    // Restarting throws the old suggestion away and asks again, so what is on
+    // screen is always about the position actually being played.
+    await tester.tap(find.text('Restart'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backgroundOf('a3'), suggestedFrom);
+  });
+
   testWidgets('a chosen way of playing survives a restart of the app', (
     tester,
   ) async {
@@ -217,6 +356,23 @@ void main() {
     expect(find.text('Classic Checkers'), findsOneWidget);
 
     // And the Back button returns to the menu.
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('New Game'), findsOneWidget);
+  });
+
+  testWidgets('the history screen is reachable from the main menu', (
+    tester,
+  ) async {
+    await tester.pumpWidget(MyApp());
+
+    expect(find.text('History'), findsOneWidget);
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('History'), findsWidgets);
+    expect(find.text('No games yet'), findsOneWidget);
+
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('New Game'), findsOneWidget);

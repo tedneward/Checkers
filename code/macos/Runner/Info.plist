@@ -22,6 +22,17 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<!-- The game history lives in the app's Documents directory. On macOS that
+	     is inside the sandbox container, so this key is what makes the folder
+	     visible in Finder rather than hidden away: a player can see what is
+	     being kept, copy it somewhere else, and get at it if the app is ever
+	     removed.
+
+	     Note that this is not the same as syncing to iCloud. Doing that needs an
+	     iCloud container entitlement, which has to be provisioned for the app
+	     id before it can be put in DebugProfile.entitlements; see README.md. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>

@@ -67,6 +67,15 @@ class SettingsScreen extends StatelessWidget {
                 caption: variant.label,
               ),
             ),
+            ValueListenableBuilder<bool>(
+              valueListenable: settings.aiSuggestionsEnabled,
+              builder: (context, enabled, child) => _SettingsLine(
+                'AI Suggestions',
+                Icon(enabled ? Icons.lightbulb : Icons.lightbulb_outline),
+                onSelected: settings.toggleAiSuggestions,
+                caption: enabled ? 'On' : 'Off',
+              ),
+            ),
             _SettingsLine(
               'Reset progress',
               const Icon(Icons.delete),

@@ -47,6 +47,12 @@ class LocalStorageSettingsPersistence extends SettingsPersistence {
   }
 
   @override
+  Future<bool> getAiSuggestionsEnabled({required bool defaultValue}) async {
+    final prefs = await instanceFuture;
+    return prefs.getBool('aiSuggestionsEnabled') ?? defaultValue;
+  }
+
+  @override
   Future<void> saveAudioOn(bool value) async {
     final prefs = await instanceFuture;
     await prefs.setBool('audioOn', value);
@@ -70,6 +76,12 @@ class LocalStorageSettingsPersistence extends SettingsPersistence {
     // Stored by name rather than by index, so that adding a variant later does
     // not silently repoint everybody's saved choice at a different one.
     await prefs.setString('ruleVariant', value.name);
+  }
+
+  @override
+  Future<void> saveAiSuggestionsEnabled(bool value) async {
+    final prefs = await instanceFuture;
+    await prefs.setBool('aiSuggestionsEnabled', value);
   }
 
   @override

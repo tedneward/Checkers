@@ -2,6 +2,7 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/material.dart';
@@ -11,26 +12,27 @@ import 'package:provider/provider.dart';
 import '../audio/audio_controller.dart';
 import '../audio/sounds.dart';
 import '../engine/checkers.dart';
+import '../history/game_history_controller.dart';
 import '../player_progress/player_progress.dart';
 import '../settings/settings.dart';
+import '../style/board_view.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
 import '../style/responsive_screen.dart';
 
-/// How long the computer may think about its move.
+/// How long the AI may spend thinking about a suggestion.
 const Duration _aiTimeLimit = Duration(seconds: 2);
 
-/// How many plies the computer looks ahead before it moves.
+/// How many plies the AI looks ahead when suggesting a move.
 ///
 /// The search also runs under [_aiTimeLimit], so this is an upper bound: the
-/// computer stops at whichever limit comes first.
+/// search stops at whichever limit comes first.
 const int _aiDepth = 6;
 
-/// Plays one game of checkers against the computer.
+/// Plays one game of checkers against another player.
 ///
-/// The player is red and moves first. Tapping one of red's pieces selects it
-/// and marks every square it may move to; tapping one of those squares plays
-/// the move and hands the turn to the computer.
+/// Players take turns moving on the same board. If AI suggestions are enabled in
+/// Settings, the AI marks the best move for the player whose turn it is.
 class PlaySessionScreen extends StatefulWidget {
   const PlaySessionScreen({super.key});
 
@@ -44,18 +46,31 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   /// Red's selected piece, or `null` when nothing is selected.
   Square? _selected;
 
-  /// Whether the computer is still deciding its move.
-  bool _thinking = false;
+  /// Whether the AI is computing a suggested move for the side to move.
+  bool _thinkingSuggestion = false;
 
-  /// Bumped for every game and every search, so that a reply which lands after
-  /// the player has already restarted can be recognised as stale.
-  int _searchId = 0;
+  /// Bumped for every suggestion search, so a reply which lands late can be
+  /// recognised as stale.
+  int _suggestionSearchId = 0;
+
+  /// The move the AI suggests for the side to move, or `null` if none.
+  Move? _suggestedMove;
 
   @override
   void initState() {
     super.initState();
     _startNewGame();
+    _maybeFetchSuggestion();
   }
+
+  /// The rules this game is being played under.
+  ///
+  /// The setting is read once per game rather than watched. A player cannot
+  /// reach Settings mid-game without leaving the board, so there is nothing to
+  /// watch for, and reading on every build would only risk rebuilding around a
+  /// half-finished suggestion search.
+  RuleVariant get _variant =>
+      context.read<SettingsController>().ruleVariant.value;
 
   void _startNewGame() {
     // Read, not watch: the variant chosen in Settings is only consulted when a
@@ -67,15 +82,34 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
     // may still be reading the default. That matches how the audio settings
     // behave at startup, and by the time the player has found the Settings
     // screen their choice has long since landed.
-    final variant = context.read<SettingsController>().ruleVariant.value;
+    final variant = _variant;
     _game = Game.standard(rules: variant.rules);
     _selected = null;
-    _thinking = false;
-    _searchId++;
+    _suggestedMove = null;
+    _thinkingSuggestion = false;
+    _suggestionSearchId++;
+
+    // The history is told about a new game here, which forgets whatever game was
+    // being recorded. That game stays in the history, unfinished at the last
+    // move it reached; hitting Restart is not the same as deleting it.
+    context.read<GameHistoryController>().beginGame(
+      initialFen: _game.fen,
+      variant: variant,
+    );
+  }
+
+  @override
+  void dispose() {
+    // Bumping the id makes any search still running recognise that its answer
+    // is no longer wanted, so it cannot call setState on a disposed screen. The
+    // search itself is not cancelled, because an isolate mid-search cannot be
+    // interrupted; its reply channel is closed by `_askEngineForMove` instead.
+    _suggestionSearchId++;
+    super.dispose();
   }
 
   void _onSquareTapped(Square square) {
-    if (_thinking || _game.isGameOver) {
+    if (_thinkingSuggestion || _game.isGameOver) {
       return;
     }
 
@@ -89,55 +123,96 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
     // Otherwise this had better be a square the selected piece can reach. If
     // it isn't, leave the selection where it is so the player can try again.
     final from = _selected;
-    if (from == null || !_game.tryApplyMoveFrom(from, square)) {
+    if (from == null) {
       return;
     }
+    // The move is looked up before it is played rather than letting
+    // `tryApplyMoveFrom` find it again, because the move itself is what gets
+    // written to the history and the two calls must not be able to disagree
+    // about which move was played.
+    final move = _game.findMove(from, square);
+    if (move == null || !_game.tryApplyMove(move)) {
+      return;
+    }
+
+    // Not awaited: a player who has just moved should not wait on a disk write
+    // before the board updates. The controller logs and carries on if it fails.
+    unawaited(context.read<GameHistoryController>().recordMove(move));
 
     context.read<AudioController>().playSfx(SfxType.buttonTap);
     setState(() {
       _selected = null;
-      _thinking = true;
+      _suggestedMove = null;
     });
-    _playComputerMove();
-  }
+    _maybeFetchSuggestion();
 
-  /// Asks the engine for a reply and plays it.
-  Future<void> _playComputerMove() async {
-    final searchId = ++_searchId;
-
-    final notation = await _askEngineForMove(
-      fen: _game.fen,
-      rules: _game.rules,
-      drawRules: _game.drawRules,
-      depth: _aiDepth,
-    );
-
-    // The game may have been restarted while the engine was thinking.
-    if (!mounted || searchId != _searchId) {
-      return;
-    }
-    setState(() => _thinking = false);
-
-    if (notation != null) {
-      try {
-        _game.applyMove(_game.parseMove(notation));
-      } on IllegalMoveException {
-        // The engine offered a move this position no longer accepts, which
-        // should not happen. Leave the turn where it is rather than crash.
-        return;
-      }
-    }
-
-    // Checked whether or not there was a reply: when the player's own move
-    // finished the game the engine has nothing to suggest, and the win still
-    // has to be reported.
+    // The other player moves next, so a suggestion may be wanted immediately.
+    // A finished game has nobody to suggest for.
     if (_game.isGameOver) {
       _onGameOver();
     }
   }
 
+  void _maybeFetchSuggestion() {
+    if (!_game.isGameOver) {
+      _fetchSuggestion();
+    }
+  }
+
+  /// Fetches an AI suggestion for the side to move if suggestions are enabled.
+  Future<void> _fetchSuggestion() async {
+    final settings = context.read<SettingsController>();
+    if (!settings.aiSuggestionsEnabled.value) {
+      if (mounted && (_suggestedMove != null || _thinkingSuggestion)) {
+        setState(() {
+          _suggestedMove = null;
+          _thinkingSuggestion = false;
+        });
+      }
+      return;
+    }
+    final searchId = ++_suggestionSearchId;
+    setState(() => _thinkingSuggestion = true);
+
+    // Read the position before awaiting, so a Restart that lands while the
+    // search is in flight cannot change what is being asked about.
+    final fen = _game.fen;
+    final rules = _game.rules;
+    final drawRules = _game.drawRules;
+
+    final notation = await _askEngineForMove(
+      fen: fen,
+      rules: rules,
+      drawRules: drawRules,
+      depth: _aiDepth,
+    );
+    if (!mounted || searchId != _suggestionSearchId) {
+      return;
+    }
+    setState(() => _thinkingSuggestion = false);
+    if (notation == null) {
+      setState(() => _suggestedMove = null);
+      return;
+    }
+    try {
+      setState(() => _suggestedMove = _game.parseMove(notation));
+    } on IllegalMoveException {
+      setState(() => _suggestedMove = null);
+    }
+  }
+
   /// Reports a won game to the win screen.
   void _onGameOver() {
+    // Whatever the outcome, the history needs it. This happens before the
+    // red-won-only branch below, so a drawn or lost game is recorded as such
+    // rather than being left sitting in the history reading "Unfinished".
+    unawaited(
+      context.read<GameHistoryController>().completeGame(
+        outcome: _game.outcome,
+        termination: _game.termination,
+      ),
+    );
+
     if (_game.outcome != GameOutcome.redWin) {
       // Lost or drawn. Nothing to record, so the result stays on the board.
       return;
@@ -160,18 +235,41 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
     return {for (final move in _game.legalMovesFrom(from)) move.to};
   }
 
+  Set<Square> get _suggestedTargets {
+    final move = _suggestedMove;
+    if (move == null || _selected != null) {
+      return const {};
+    }
+    final path = move.path;
+    if (path.length < 2) {
+      return const {};
+    }
+    return {path.last};
+  }
+
+  Square? get _suggestedFrom {
+    // Hidden while a piece is in hand. The player is mid-decision at that
+    // point, and the dot markers already say what that piece can do. Leaving
+    // the suggestion up as well would put two incompatible answers on screen at
+    // once, and a target dot is far easier to mistake for the suggestion.
+    if (_selected != null) {
+      return null;
+    }
+    return _suggestedMove?.from;
+  }
+
   /// The line of text describing whose turn it is, or how the game ended.
   String get _status {
     if (_game.isGameOver) {
       return switch (_game.outcome) {
-        GameOutcome.redWin => 'You won!',
+        GameOutcome.redWin => 'Red won!',
         GameOutcome.blackWin => 'Black won',
         GameOutcome.draw => 'A draw',
         GameOutcome.inProgress => '',
       };
     }
-    if (_thinking) {
-      return 'Black is thinking...';
+    if (_thinkingSuggestion) {
+      return 'Computing suggestion...';
     }
     return '${_game.sideToMove.label} to move';
   }
@@ -200,16 +298,20 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
               style: TextStyle(
                 fontFamily: 'Permanent Marker',
                 fontSize: 20,
-                color: _thinking ? palette.ink.withValues(alpha: 0.6) : null,
+                color: _thinkingSuggestion
+                    ? palette.ink.withValues(alpha: 0.6)
+                    : null,
               ),
             ),
           ],
         ),
-        squarishMainArea: _BoardView(
-          game: _game,
+        squarishMainArea: BoardView(
+          board: _game.board,
+          lastMove: _game.lastMove,
           selected: _selected,
-          targets: _targets,
-          enabled: !_thinking && !_game.isGameOver,
+          targets: _targets.union(_suggestedTargets),
+          suggestedFrom: _suggestedFrom,
+          enabled: !_thinkingSuggestion && !_game.isGameOver,
           onSquareTapped: _onSquareTapped,
         ),
         rectangularMenuArea: Column(
@@ -217,7 +319,10 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
           children: [
             _ButtonRow(
               firstLabel: 'Restart',
-              onFirstPressed: () => setState(_startNewGame),
+              onFirstPressed: () {
+                setState(_startNewGame);
+                _maybeFetchSuggestion();
+              },
               secondLabel: 'Back',
               // `/play` is this screen, so Back goes to the main menu.
               onSecondPressed: () => GoRouter.of(context).go('/'),
@@ -245,6 +350,28 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
+            // Names the suggestion in words as well as shading it on the board,
+            // so a player who cannot pick the shading out still gets told which
+            // square the AI has in mind.
+            if (context
+                .watch<SettingsController>()
+                .aiSuggestionsEnabled
+                .value) ...[
+              const SizedBox(height: 2),
+              Text(
+                _thinkingSuggestion
+                    ? 'Computing suggestion...'
+                    : switch (_suggestedMove) {
+                        final move? =>
+                          'Suggestion: '
+                              '${move.from.name}-${move.to.name}',
+                        null => 'No suggestion',
+                      },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),
@@ -252,7 +379,7 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   }
 }
 
-/// Searches for black's reply in a separate isolate and returns its notation.
+/// Searches for the best move in a separate isolate and returns its notation.
 ///
 /// This has to be a top-level function rather than a closure. An isolate
 /// message carries the entry point itself, and a closure would bring its
@@ -330,176 +457,6 @@ class _ButtonRow extends StatelessWidget {
           const SizedBox(width: 12),
           MyButton(onPressed: onSecondPressed, child: Text(secondLabel)),
         ],
-      ),
-    );
-  }
-}
-
-/// The 8x8 board, drawn with rank 8 at the top.
-///
-/// Light squares are inert; tapping a dark square tells [onSquareTapped].
-class _BoardView extends StatelessWidget {
-  const _BoardView({
-    required this.game,
-    required this.selected,
-    required this.targets,
-    required this.enabled,
-    required this.onSquareTapped,
-  });
-
-  final Game game;
-
-  /// The square the player has picked up, if any.
-  final Square? selected;
-
-  /// The squares that piece may move to.
-  final Set<Square> targets;
-
-  /// Whether the board accepts taps at the moment.
-  final bool enabled;
-
-  final ValueChanged<Square> onSquareTapped;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.watch<Palette>();
-    final lastMove = game.lastMove;
-
-    return Center(
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.ink, width: 3),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final size = constraints.biggest.width / Square.boardSize;
-              return GridView.builder(
-                // Without this, a `GridView` whose `padding` is null wraps its
-                // sliver in a `SliverPadding` built from `MediaQuery.padding`
-                // along the scroll axis. `ResponsiveScreen` deliberately leaves
-                // the top and bottom insets unconsumed, so the notch and the
-                // home indicator would be added to the board's height here and
-                // then clipped away, taking the bottom row of pieces with them.
-                // The screen above already handled the safe area.
-                padding: EdgeInsets.zero,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: Square.boardSize,
-                ),
-                itemCount: Square.count,
-                itemBuilder: (context, index) {
-                  // The grid starts at the top left, but squares are numbered
-                  // from a1 in the bottom left, so walk the ranks downwards.
-                  final rankIndex =
-                      Square.boardSize - 1 - index ~/ Square.boardSize;
-                  final square = Square.atFileRank(
-                    index % Square.boardSize,
-                    rankIndex,
-                  );
-                  return _SquareTile(
-                    square: square,
-                    size: size,
-                    piece: game.board[square],
-                    isSelected: square == selected,
-                    isTarget: targets.contains(square),
-                    isLastMove:
-                        lastMove != null &&
-                        (square == lastMove.from || square == lastMove.to),
-                    enabled: enabled,
-                    onTapped: onSquareTapped,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One square of the board, with whatever piece is standing on it.
-class _SquareTile extends StatelessWidget {
-  const _SquareTile({
-    required this.square,
-    required this.size,
-    required this.piece,
-    required this.isSelected,
-    required this.isTarget,
-    required this.isLastMove,
-    required this.enabled,
-    required this.onTapped,
-  });
-
-  final Square square;
-  final double size;
-  final Piece? piece;
-  final bool isSelected;
-  final bool isTarget;
-  final bool isLastMove;
-  final bool enabled;
-  final ValueChanged<Square> onTapped;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.watch<Palette>();
-
-    // Light squares carry no pieces, so they are just background.
-    final background = switch ((square.isDark, isSelected, isLastMove)) {
-      (false, _, _) => palette.trueWhite,
-      (_, true, _) => palette.background4,
-      (_, _, true) => palette.backgroundMain,
-      _ => palette.backgroundSettings,
-    };
-
-    return GestureDetector(
-      key: ValueKey('square-${square.name}'),
-      onTap: enabled && square.isDark ? () => onTapped(square) : null,
-      child: Container(
-        color: background,
-        alignment: Alignment.center,
-        child: piece == null
-            // An empty square the piece may move to gets a dot.
-            ? (isTarget
-                  ? Container(
-                      width: size * 0.25,
-                      height: size * 0.25,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: palette.ink.withValues(alpha: 0.35),
-                      ),
-                    )
-                  : null)
-            : _PieceView(piece: piece!, size: size),
-      ),
-    );
-  }
-}
-
-/// A man or a king, drawn as a disc.
-class _PieceView extends StatelessWidget {
-  const _PieceView({required this.piece, required this.size});
-
-  final Piece piece;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.watch<Palette>();
-    final diameter = size * 0.8;
-
-    return Container(
-      width: diameter,
-      height: diameter,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: piece.side.isRed ? palette.redPen : palette.inkFullOpacity,
-        // A king is marked by a ring, so the two kinds read apart at a glance.
-        border: piece.isKing
-            ? Border.all(color: palette.trueWhite, width: size * 0.08)
-            : null,
       ),
     );
   }

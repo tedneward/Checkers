@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'about/about_screen.dart';
+import 'history/history_screen.dart';
+import 'history/replay_screen.dart';
 import 'main_menu/main_menu_screen.dart';
 import 'play_session/play_session_screen.dart';
 import 'rules/rules_screen.dart';
@@ -75,6 +77,31 @@ GoRouter createRouter() => GoRouter(
             color: context.watch<Palette>().backgroundSettings,
             child: const AboutScreen(key: Key('about screen')),
           ),
+        ),
+        GoRoute(
+          path: 'history',
+          pageBuilder: (context, state) => buildMyTransition<void>(
+            key: const ValueKey('history'),
+            color: context.watch<Palette>().backgroundMain,
+            child: const HistoryScreen(key: Key('history screen')),
+          ),
+          routes: [
+            // The replay screen reads the game from the store by this id rather
+            // than being handed it through the router, so going straight to a
+            // replay link works and a stale id cannot leave it showing a
+            // half-built game.
+            GoRoute(
+              path: 'replay/:id',
+              pageBuilder: (context, state) => buildMyTransition<void>(
+                key: const ValueKey('replay'),
+                color: context.watch<Palette>().backgroundPlaySession,
+                child: ReplayScreen(
+                  key: const Key('replay screen'),
+                  gameId: int.tryParse(state.pathParameters['id'] ?? '') ?? -1,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     ),

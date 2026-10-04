@@ -19,6 +19,11 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.5.5
   package_info_plus: ^10.2.2
+  sqflite: ^2.4.4
+  sqflite_common_ffi: ^2.4.3
+  sqflite_common_ffi_web: ^1.2.0
+  path: ^1.9.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_lints: ^6.0.0

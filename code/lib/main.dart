@@ -12,6 +12,8 @@ import 'package:provider/provider.dart';
 
 import 'app_lifecycle/app_lifecycle.dart';
 import 'audio/audio_controller.dart';
+import 'history/game_history_controller.dart';
+import 'history/persistence/open_history_store.dart';
 import 'player_progress/player_progress.dart';
 import 'router.dart';
 import 'settings/settings.dart';
@@ -42,7 +44,17 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  /// Creates the app.
+  ///
+  /// [historyController] replaces the one that would otherwise open the real
+  /// database. The app itself never passes it; it exists so that a test can put
+  /// a store it controls behind the history and replay screens, rather than
+  /// whatever happens to be on the machine running the tests.
+  const MyApp({super.key, this.historyController});
+
+  /// The history to use instead of opening the player's own, or `null` to open
+  /// it.
+  final GameHistoryController? historyController;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +70,13 @@ class MyApp extends StatelessWidget {
           Provider(create: (context) => SettingsController()),
           Provider(create: (context) => Palette()),
           ChangeNotifierProvider(create: (context) => PlayerProgress()),
+          // Records games as they are played and reads them back for the
+          // history and replay screens. The store opens itself in the
+          // background; nothing waits on it to start playing.
+          Provider<GameHistoryController>(
+            create: (context) =>
+                historyController ?? GameHistoryController(openHistoryStore()),
+          ),
           // Set up audio.
           ProxyProvider2<
             AppLifecycleStateNotifier,

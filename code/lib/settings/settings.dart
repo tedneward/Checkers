@@ -36,6 +36,9 @@ class SettingsController {
   /// Whether or not the music is on.
   ValueNotifier<bool> musicOn = ValueNotifier(true);
 
+  /// Whether or not AI move suggestions are shown on the board.
+  ValueNotifier<bool> aiSuggestionsEnabled = ValueNotifier(false);
+
   /// Which way of playing the game the player has chosen.
   ///
   /// This is a whole [RuleVariant] rather than a single boolean because the
@@ -78,6 +81,11 @@ class SettingsController {
     _store.saveSoundsOn(soundsOn.value);
   }
 
+  void toggleAiSuggestions() {
+    aiSuggestionsEnabled.value = !aiSuggestionsEnabled.value;
+    _store.saveAiSuggestionsEnabled(aiSuggestionsEnabled.value);
+  }
+
   /// Remembers the [variant] the player picked for the next game.
   void setRuleVariant(RuleVariant variant) {
     ruleVariant.value = variant;
@@ -104,6 +112,9 @@ class SettingsController {
           .then((value) => musicOn.value = value),
       _store.getPlayerName().then((value) => playerName.value = value),
       _store.getRuleVariant().then((value) => ruleVariant.value = value),
+      _store
+          .getAiSuggestionsEnabled(defaultValue: false)
+          .then((value) => aiSuggestionsEnabled.value = value),
     ]);
 
     _log.fine(() => 'Loaded settings: $loadedValues');
