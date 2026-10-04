@@ -78,6 +78,10 @@ void main() {
     // Tap 'New Game'. That goes straight into a game.
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
 
     // The game is on show, and it is red's turn to move the first piece.
     expect(find.text('Checkers'), findsOneWidget);
@@ -153,6 +157,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
 
     // The game names the rules it is being played under, so the player can see
     // the setting reached the board rather than having to take it on trust.
@@ -170,6 +178,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
 
     // Nothing has been chosen, so the game is played by the default rules.
     expect(find.text(RuleVariant.defaultVariant.label), findsOneWidget);
@@ -188,6 +200,10 @@ void main() {
 
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
 
     // Red is to move first, and the board is live for whoever's turn it is.
     expect(find.text('Red to move'), findsOneWidget);
@@ -232,6 +248,10 @@ void main() {
 
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
 
     // The suggestion arrives off the UI isolate, so it needs real async time
     // before the highlight can appear.
@@ -288,6 +308,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+    }
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(seconds: 3)),
     );

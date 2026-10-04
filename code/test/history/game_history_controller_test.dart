@@ -64,6 +64,8 @@ class WatchfulStore extends GameHistoryStore {
     required DateTime startedAt,
     required String initialFen,
     required RuleVariant variant,
+    String? redPlayerName,
+    String? blackPlayerName,
   }) async {
     _record('createGame');
     return _nextId++;

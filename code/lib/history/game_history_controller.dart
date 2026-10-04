@@ -65,11 +65,18 @@ class GameHistoryController {
   /// That earlier game stays in the history, unfinished at the last move it
   /// reached. Restarting is not the same as deleting, so nothing is removed
   /// here.
-  void beginGame({required String initialFen, required RuleVariant variant}) {
+  void beginGame({
+    required String initialFen,
+    required RuleVariant variant,
+    String? redPlayerName,
+    String? blackPlayerName,
+  }) {
     _recording = _Recording(
       startedAt: DateTime.now(),
       initialFen: initialFen,
       variant: variant,
+      redPlayerName: redPlayerName,
+      blackPlayerName: blackPlayerName,
     );
   }
 
@@ -194,6 +201,8 @@ class _Recording {
     required this.startedAt,
     required this.initialFen,
     required this.variant,
+    this.redPlayerName,
+    this.blackPlayerName,
   });
 
   /// When the game began, which is not when it was first written: a game opened
@@ -205,6 +214,10 @@ class _Recording {
 
   /// The way of playing it was under.
   final RuleVariant variant;
+
+  final String? redPlayerName;
+
+  final String? blackPlayerName;
 
   /// The store's identifier for the game, once a move has caused it to exist.
   ///
@@ -228,6 +241,8 @@ class _Recording {
       startedAt: startedAt,
       initialFen: initialFen,
       variant: variant,
+      redPlayerName: redPlayerName,
+      blackPlayerName: blackPlayerName,
     );
     id = created;
     return write(created);

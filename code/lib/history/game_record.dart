@@ -20,6 +20,8 @@ class GameSummary {
     required this.outcome,
     required this.moveCount,
     this.termination,
+    this.redPlayerName,
+    this.blackPlayerName,
   });
 
   /// The database's identifier for this game.
@@ -52,6 +54,16 @@ class GameSummary {
   /// How many moves have been played so far, counting each side's turn as one.
   final int moveCount;
 
+  /// Name of the player using red pieces, or null if not recorded.
+  final String? redPlayerName;
+
+  /// Name of the player using black pieces, or null if not recorded.
+  final String? blackPlayerName;
+
+  String get redName => redPlayerName ?? 'Red';
+
+  String get blackName => blackPlayerName ?? 'Black';
+
   /// The side that won, or `null` for a draw or a game that never finished.
   Side? get winner => outcome.winner;
 
@@ -62,8 +74,8 @@ class GameSummary {
   /// finished game from an abandoned one.
   String get outcomeLabel => switch (outcome) {
     GameOutcome.inProgress => 'Unfinished',
-    GameOutcome.redWin => 'Red won',
-    GameOutcome.blackWin => 'Black won',
+    GameOutcome.redWin => '$redName won',
+    GameOutcome.blackWin => '$blackName won',
     GameOutcome.draw => 'Draw',
   };
 
@@ -86,6 +98,8 @@ class GameRecord extends GameSummary {
     required this.initialFen,
     required List<String> moves,
     super.termination,
+    super.redPlayerName,
+    super.blackPlayerName,
   }) : moves = List<String>.unmodifiable(moves);
 
   /// Every move played, in checkers notation, oldest first.

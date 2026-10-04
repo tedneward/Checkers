@@ -61,6 +61,8 @@ class InMemoryGameHistoryStore extends GameHistoryStore {
     required DateTime startedAt,
     required String initialFen,
     required RuleVariant variant,
+    String? redPlayerName,
+    String? blackPlayerName,
   }) async {
     final game = _StoredGame(
       id: _nextId++,
@@ -70,6 +72,8 @@ class InMemoryGameHistoryStore extends GameHistoryStore {
       outcome: GameOutcome.inProgress,
       termination: null,
       initialFen: initialFen,
+      redPlayerName: redPlayerName,
+      blackPlayerName: blackPlayerName,
     );
     _games.add(game);
     return game.id;
@@ -123,6 +127,8 @@ class _StoredGame {
     required this.outcome,
     required this.termination,
     required this.initialFen,
+    this.redPlayerName,
+    this.blackPlayerName,
   });
 
   final int id;
@@ -132,6 +138,8 @@ class _StoredGame {
   GameOutcome outcome;
   String? termination;
   final String initialFen;
+  final String? redPlayerName;
+  final String? blackPlayerName;
   final List<String> moves = [];
 
   GameSummary get summary => GameSummary(
@@ -142,6 +150,8 @@ class _StoredGame {
     outcome: outcome,
     termination: termination,
     moveCount: moves.length,
+    redPlayerName: redPlayerName,
+    blackPlayerName: blackPlayerName,
   );
 
   GameRecord toRecord() => GameRecord(
@@ -154,5 +164,7 @@ class _StoredGame {
     moveCount: moves.length,
     initialFen: initialFen,
     moves: moves,
+    redPlayerName: redPlayerName,
+    blackPlayerName: blackPlayerName,
   );
 }

@@ -19,6 +19,7 @@ import '../style/board_view.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
 import '../style/responsive_screen.dart';
+import 'player_names.dart';
 
 /// How long the AI may spend thinking about a suggestion.
 const Duration _aiTimeLimit = Duration(seconds: 2);
@@ -42,6 +43,8 @@ class PlaySessionScreen extends StatefulWidget {
 
 class _PlaySessionScreenState extends State<PlaySessionScreen> {
   late Game _game;
+  late String _redName;
+  late String _blackName;
 
   /// Red's selected piece, or `null` when nothing is selected.
   Square? _selected;
@@ -89,12 +92,32 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
     _thinkingSuggestion = false;
     _suggestionSearchId++;
 
+    final settings = context.read<SettingsController>();
+    final extra = GoRouterState.of(context).extra;
+    bool randomize = false;
+    String? redName;
+    String? blackName;
+    if (extra is Map) {
+      randomize = extra['randomizePlayers'] as bool? ?? false;
+      redName = extra['redPlayerName'] as String?;
+      blackName = extra['blackPlayerName'] as String?;
+    }
+    final names = getAssignedNames(
+      redName ?? settings.redPlayerName.value,
+      blackName ?? settings.blackPlayerName.value,
+      randomize,
+    );
+    _redName = names.red;
+    _blackName = names.black;
+
     // The history is told about a new game here, which forgets whatever game was
     // being recorded. That game stays in the history, unfinished at the last
     // move it reached; hitting Restart is not the same as deleting it.
     context.read<GameHistoryController>().beginGame(
       initialFen: _game.fen,
       variant: variant,
+      redPlayerName: _redName,
+      blackPlayerName: _blackName,
     );
   }
 
@@ -262,8 +285,8 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   String get _status {
     if (_game.isGameOver) {
       return switch (_game.outcome) {
-        GameOutcome.redWin => 'Red won!',
-        GameOutcome.blackWin => 'Black won',
+        GameOutcome.redWin => '$_redName won!',
+        GameOutcome.blackWin => '$_blackName won',
         GameOutcome.draw => 'A draw',
         GameOutcome.inProgress => '',
       };
@@ -271,7 +294,8 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
     if (_thinkingSuggestion) {
       return 'Computing suggestion...';
     }
-    return '${_game.sideToMove.label} to move';
+    final name = _game.sideToMove.isRed ? _redName : _blackName;
+    return '$name to move';
   }
 
   @override

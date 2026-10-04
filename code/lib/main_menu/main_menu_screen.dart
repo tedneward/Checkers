@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../audio/audio_controller.dart';
 import '../audio/sounds.dart';
+import '../play_session/game_setup_dialog.dart';
 import '../settings/settings.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
@@ -45,7 +46,16 @@ class MainMenuScreen extends StatelessWidget {
             MyButton(
               onPressed: () {
                 audioController.playSfx(SfxType.buttonTap);
-                GoRouter.of(context).go('/play');
+                showGameSetupDialog(context).then((result) {
+                  if (result is Map &&
+                      result['start'] == true &&
+                      context.mounted) {
+                    GoRouter.of(context).go(
+                      '/play',
+                      extra: {'randomizePlayers': result['randomize'] ?? false},
+                    );
+                  }
+                });
               },
               child: const Text('New Game'),
             ),

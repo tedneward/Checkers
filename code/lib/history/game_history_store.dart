@@ -44,6 +44,8 @@ abstract class GameHistoryStore {
     required DateTime startedAt,
     required String initialFen,
     required RuleVariant variant,
+    String? redPlayerName,
+    String? blackPlayerName,
   });
 
   /// Adds [move] to the game with [gameId].

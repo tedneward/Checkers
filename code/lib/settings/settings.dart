@@ -30,6 +30,12 @@ class SettingsController {
   /// The player's name. Kept for player-facing screens that greet the player.
   ValueNotifier<String> playerName = ValueNotifier('Player');
 
+  /// Name of the player using the red pieces.
+  ValueNotifier<String> redPlayerName = ValueNotifier('Red');
+
+  /// Name of the player using the black pieces.
+  ValueNotifier<String> blackPlayerName = ValueNotifier('Black');
+
   /// Whether or not the sound effects (sfx) are on.
   ValueNotifier<bool> soundsOn = ValueNotifier(true);
 
@@ -64,6 +70,16 @@ class SettingsController {
   void setPlayerName(String name) {
     playerName.value = name;
     _store.savePlayerName(playerName.value);
+  }
+
+  void setRedPlayerName(String name) {
+    redPlayerName.value = name;
+    _store.saveRedPlayerName(name);
+  }
+
+  void setBlackPlayerName(String name) {
+    blackPlayerName.value = name;
+    _store.saveBlackPlayerName(name);
   }
 
   void toggleAudioOn() {
@@ -111,6 +127,10 @@ class SettingsController {
           .getMusicOn(defaultValue: true)
           .then((value) => musicOn.value = value),
       _store.getPlayerName().then((value) => playerName.value = value),
+      _store.getRedPlayerName().then((value) => redPlayerName.value = value),
+      _store.getBlackPlayerName().then(
+        (value) => blackPlayerName.value = value,
+      ),
       _store.getRuleVariant().then((value) => ruleVariant.value = value),
       _store
           .getAiSuggestionsEnabled(defaultValue: false)

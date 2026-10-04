@@ -190,6 +190,8 @@ class SqliteGameHistoryStore extends GameHistoryStore {
     required DateTime startedAt,
     required String initialFen,
     required RuleVariant variant,
+    String? redPlayerName,
+    String? blackPlayerName,
   }) async {
     final db = await _db;
     return db.insert('games', {

@@ -15,6 +15,10 @@ abstract class SettingsPersistence {
 
   Future<String> getPlayerName();
 
+  Future<String> getRedPlayerName();
+
+  Future<String> getBlackPlayerName();
+
   /// The rule variation the player last chose, or [RuleVariant.defaultVariant]
   /// if nothing has been stored or the stored name is not one this build knows.
   Future<RuleVariant> getRuleVariant();
@@ -29,6 +33,10 @@ abstract class SettingsPersistence {
   Future<void> saveMusicOn(bool value);
 
   Future<void> savePlayerName(String value);
+
+  Future<void> saveRedPlayerName(String value);
+
+  Future<void> saveBlackPlayerName(String value);
 
   /// Stores [value] by name, which is enough to read it back on any later
   /// version that still offers that variant.

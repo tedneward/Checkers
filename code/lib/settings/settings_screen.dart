@@ -7,11 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../engine/checkers.dart';
-import '../player_progress/player_progress.dart';
 import '../style/my_button.dart';
 import '../style/palette.dart';
 import '../style/responsive_screen.dart';
-import 'custom_name_dialog.dart';
 import 'rule_variant_dialog.dart';
 import 'settings.dart';
 

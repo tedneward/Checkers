@@ -36,6 +36,16 @@ void main() {
     await tester.pumpWidget(MyApp());
     await tester.tap(find.text('New Game'));
     await tester.pumpAndSettle();
+    // Dismiss game setup dialog if present
+    if (find.text('Start').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+    }
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    for (int i = 0; i < 3; i++) {
+      if (_square("a1").evaluate().isNotEmpty) break;
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+    }
 
     // Reaching the game legitimately overflows the main menu on short screens,
     // which is a separate concern from the board's own layout.
