@@ -109,7 +109,6 @@ void main() {
     );
 
     test('alternating sides throughout playthrough', () {
-      final game = Game.standard();
       final moves = playDeterministic(Game.standard(), 6);
       final game2 = Game.standard();
       applyMoves(game2, moves);
@@ -149,7 +148,6 @@ void main() {
     });
 
     test('complex sequences work with notation roundtrip', () {
-      final game = Game.standard();
       final moves = playDeterministic(Game.standard(), 10);
       final game2 = Game.standard();
       applyMoves(game2, moves);

@@ -25,14 +25,17 @@ class _GameSetupDialogState extends State<GameSetupDialog> {
   final TextEditingController _redController = TextEditingController();
   final TextEditingController _blackController = TextEditingController();
   bool _randomizeColors = false;
-  bool _swapColors = false;
 
   @override
   void initState() {
     super.initState();
-    final settings = context.read<SettingsController>();
-    _redController.text = settings.redPlayerName.value;
-    _blackController.text = settings.blackPlayerName.value;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settings = context.read<SettingsController>();
+      if (mounted) {
+        _redController.text = settings.redPlayerName.value;
+        _blackController.text = settings.blackPlayerName.value;
+      }
+    });
   }
 
   @override

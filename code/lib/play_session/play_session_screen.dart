@@ -46,6 +46,11 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   late String _redName;
   late String _blackName;
 
+  /// Guards [_startNewGame] so the first dependency change sets the game up
+  /// exactly once. Later rebuilds caused by inherited widgets changing must
+  /// not silently throw away a game in progress.
+  bool _started = false;
+
   /// Red's selected piece, or `null` when nothing is selected.
   Square? _selected;
 
@@ -60,8 +65,16 @@ class _PlaySessionScreenState extends State<PlaySessionScreen> {
   Move? _suggestedMove;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Starting a game reads the router state and the settings controller, so it
+    // cannot happen in initState: inherited widgets are not reachable that
+    // early. didChangeDependencies is the first lifecycle point where reading
+    // them is legal, and the `_started` guard keeps it to a single call.
+    if (_started) {
+      return;
+    }
+    _started = true;
     _startNewGame();
     _maybeFetchSuggestion();
   }
